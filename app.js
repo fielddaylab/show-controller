@@ -1,28 +1,21 @@
-var express = require('express')
-  , app = express()  
-  , server = require('http').createServer(app)
-  , path = require('path')
-  , io = require('socket.io').listen(server)
-  , spawn = require('child_process').spawn
-  , omx = require('omxcontrol');
+/*
+CONFIG SECTION
+*/
 
-// all environments
-app.set('port', process.env.TEST_PORT || 8080);
-app.use(express.favicon());
-app.use(express.logger('dev'));
-app.use(express.bodyParser());
-app.use(express.methodOverride());
-app.use(express.static(path.join(__dirname, 'public')));
+var config = {
+	port : 8080,
+	testMediaPath : "media/test.mp4"
+}
 
-var events = 
+var sequences = 
 {
-	"start": 
+	"1": 
 	{
-		"sequence":
+		"events":
 		[
 			{
 				"type":"play_video",
-				"filename":"intro.mp4"
+				"filename":"AA2014-1.mp4"
 			},
 			{
 				"type":"trigger_event",
@@ -31,73 +24,109 @@ var events =
 			}
 		]
 	},
-	"vote1": 
+	"1then2": 
 	{
-		"sequence":
+		"events":
 		[
 			{
 				"type":"play_video",
-				"filename":"1.mp4"
+				"filename":"AA2014-1.mp4"
 			},
 			{
 				"type":"play_video",
-				"filename":"end.mp4"
-			},
+				"filename":"AA2014-2.mp4"
+			}
 		]
 	},
-	"vote2": 
+	"2": 
 	{
-		"sequence":
+		"events":
 		[
 			{
 				"type":"play_video",
-				"filename":"2.mp4"
-			},
-			{
-				"type":"play_video",
-				"filename":"end.mp4"
-			},
+				"filename":"AA2014-2.mp4"
+			}
 		]
 	},
-	"end": 
+	"3": 
 	{
-	"sequence":
+		"events":
 		[
 			{
 				"type":"play_video",
-				"filename":"end.mp4"
+				"filename":"AA2014-3.mp4"
+			}
+		]
+	},
+	"4": 
+	{
+		"events":
+		[
+			{
+				"type":"play_video",
+				"filename":"AA2014-4.mp4"
 			}
 		]
 	}
 }
 
+var express = require('express')
+  , app = express()  
+  , server = require('http').createServer(app)
+  , path = require('path')
+  , io = require('socket.io').listen(server)
+  , spawn = require('child_process').spawn
+  , omx = require('omxcontrol')
+  , fs = require('fs')
+  , PusherClient = require('pusher-node-client').PusherClient
+  ;
 
-//Static Routes
-app.get('/control', function (req, res) {
-  res.sendfile(__dirname + '/public/control.html');
-});
-
-app.get('/playlow', function (req, res) {
-	console.log('Playing low.mp4');
-	omx.start("videos/low.mp4");
-	console.log(res);
-});
-
-//The main trigger setup
-app.get('/:event', function (req, res) {
-  handle_event(req.param("event"));
-});
-
-
-
-//Launch the server
-server.listen(app.get('port'), function(){
-  console.log('Express server listening on port ' + app.get('port'));
-});
-
-//use it with express
+/*
+SETUP EXPRESS HTML SERVER
+*/
+app.set('config', config);
+app.use(express.favicon());
+app.use(express.logger('dev'));
+app.use(express.bodyParser());
+app.use(express.methodOverride());
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(omx());
 
+//Root "help" route
+//Any GET Request on http://my.ip/ will show the readme and the JSON sequence config
+app.get('/', function (req, res) {
+	var response = "";
+	fs.readFile(__dirname + '/README.md', 'utf8', function (err,readme) {
+		if (err) return console.log(err);
+  		response = readme.replace('\n',"<br/>");
+  		response += "<h1>Events Object</h1>"
+  		response += JSON.stringify(sequences);
+  		res.send(response);
+	});
+});
+
+//Video playback test route
+//Any GET Request on http://my.ip/playTestVideo will trigger a test video over HDMI
+app.get('/playTestVideo', function (req, res) {
+	console.log('Playing Test Media: ' + app.get('config').testMediaPath);
+	omx.start(app.get('config').testMediaPath);
+});
+
+//Start Sequence trigger route
+//Any GET request on http://my.ip/startSequence/SEQUENCE_NAME_HERE will try and start the sequence
+app.get('/startSequence/:sequenceName', function (req, res) {
+  var result = process_squence(req.param("sequenceName"));
+  if (result == true) res.json({ok:true}); // status 200 is default
+  else res.json(500, {error:result}); // status 500
+});
+
+//Launch the server
+server.listen(app.get('config').port, function(){
+  console.log('Express server listening on port ' + app.get('config').port);
+});
+
+
+//Handle Websocket Events
 io.sockets.on('connection', function (client){ 
   
   client.on('message', function (msg) {
@@ -108,38 +137,44 @@ io.sockets.on('connection', function (client){
   });
 });
 
-function handle_event(e) {
-	console.log("Event: " + e);
-	var event = events[e];
-	if (!event) { 
-		console.log("Event is not defined in events config");
-		return;
-	}
-
-	sequence = event.sequence;
+//Process an event
+//Returns true on success and an error string on any error
+function process_squence(sequenceName) {
+	console.log("Beginning to process sequence: " + sequenceName);
+	var sequence = sequences[sequenceName];
 	if (!sequence) { 
-		console.log("Sequence is not defined for this event in events config");
-		return;
+		return console.log("Error: Sequence is not defined in sequence config");
 	}
 
-	console.log("Event Loaded. Sequence is: " + JSON.stringify(sequence));
-	
-	//foreach sequence...
-	for (var i = 0; i<sequence.length; i++) {
-		action = sequence[i].type;
-		if (sequence[i].type == "play_video") play_video(sequence[i]);
-		if (sequence[i].type == "trigger_event") trigger_event(sequence[i]);
+	events = sequence.events;
+	if (!events) { 
+		return ("Error: No events are defined for this sequence in sequence config");
 	}
+
+	console.log("Sequence Loaded. Events to proccess: " + JSON.stringify(sequence));
+	
+	//foreach event...
+	for (var i = 0; i<events.length; i++) {
+		action = events[i].type;
+		if (events[i].type == "play_video") play_video(events[i]);
+		if (events[i].type == "push_pusher_message") push_message(events[i]);
+		if (events[i].type == "emit_websocket_message") push_message(events[i]);
+
+	}
+	return true;
 }
+
 
 function play_video(event) {
 	console.log("Playing Video: " + event.filename);
-	omx.start("videos/" + event.filename);
+	omx.pause(); //Stop any currently running videos
+	omx.start("media/" + event.filename);
+	omx.play();
 	return;
 }
 
-function trigger_event(event) {
-	console.log("Triggering an Event: " + event.message);
+function push_websocket_message(event) {
+	console.log("Emiting a websocket Message: " + event.message);
 	io.sockets.emit(event.message);
 	return;
 }
