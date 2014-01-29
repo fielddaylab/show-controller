@@ -2,11 +2,6 @@
 CONFIG SECTION
 */
 
-var config = {
-	port : 8080,
-	testMediaPath : "media/test.mp4"
-}
-
 var sequences = 
 {
 	"1": 
@@ -79,7 +74,16 @@ var express = require('express')
   , omx = require('omxcontrol')
   , fs = require('fs')
   , PusherClient = require('pusher-node-client').PusherClient
+  , PusherServer = require('pusher');
   ;
+
+
+/*
+Load Config From File
+*/
+var configFile = fs.readFileSync(__dirname + '/config.json');
+var config = JSON.parse(configFile);
+console.log('Config Loaded: ' + JSON.stringify(config));
 
 /*
 SETUP EXPRESS HTML SERVER
@@ -108,8 +112,8 @@ app.get('/', function (req, res) {
 //Video playback test route
 //Any GET Request on http://my.ip/playTestVideo will trigger a test video over HDMI
 app.get('/playTestVideo', function (req, res) {
-	console.log('Playing Test Media: ' + app.get('config').testMediaPath);
-	omx.start(app.get('config').testMediaPath);
+	console.log('Playing Test Media: ' + app.get('config').express.testMediaPath);
+	omx.start(app.get('config').express.testMediaPath);
 });
 
 //Start Sequence trigger route
@@ -121,12 +125,14 @@ app.get('/startSequence/:sequenceName', function (req, res) {
 });
 
 //Launch the server
-server.listen(app.get('config').port, function(){
-  console.log('Express server listening on port ' + app.get('config').port);
+server.listen(app.get('config').express.port, function(){
+  console.log('Express server listening on port ' + app.get('config').express.port);
 });
 
 
-//Handle Websocket Events
+/*
+SETUP SOCKET.IO WEBSOCKET SERVER
+*/
 io.sockets.on('connection', function (client){ 
   
   client.on('message', function (msg) {
@@ -136,6 +142,44 @@ io.sockets.on('connection', function (client){
   client.on('disconnect', function () {
   });
 });
+
+/*
+SETUP PUSHER CLIENT
+*/
+console.log(config.pusher.id);
+
+pusher_client = new PusherClient
+  appId: config.pusher.id
+  key: config.pusher.key
+  secret: config.pusher.secret
+
+pres = null;
+pusher_client.on('connect', function(){
+  	pres = pusher_client.subscribe("presence-users", {user_id: "system"})
+
+  	pres.on('success', function(){
+
+		pres.on('pusher_internal:member_removed', function(data){
+	    	console.log ("Pusher Event: member_removed");
+	  	});
+
+	    pres.on('pusher_internal:member_added', function(data){
+	      console.log ("Pusher Event: member_added");
+	    });
+  	});
+});
+
+pusher_client.connect();
+
+/*
+SETUP PUSHER SERVER
+*/
+
+
+
+/*
+EVENT PROCESSING
+*/
 
 //Process an event
 //Returns true on success and an error string on any error
@@ -170,6 +214,10 @@ function play_video(event) {
 	omx.pause(); //Stop any currently running videos
 	omx.start("media/" + event.filename);
 	omx.play();
+	setTimeout(finish_playing_video, 3000);
+	return;
+}
+function finish_playing_video(){
 	return;
 }
 
