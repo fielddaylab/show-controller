@@ -8,38 +8,43 @@
 	    "secret": "PUSHER_SECRET",
         "channel": "private-CHANNEL_NAME_FOR_THIS_DEVICE"
     },
+    "sequenceTriggers" : { 
+    	"gpioIn1ChangedValueToHigh":"mcluhan",
+    	"gpioIn1ChangedValueToLow":"",
+    	"gpioIn2ChangedValueToHigh":"video1andGpio1High",
+    	"gpioIn2ChangedValueToLow":""
+    },
 	"sequences" : { 
 		"mcluhan": { "events":[
 			{
-				"type":"play_video",
+				"type":"playVideo",
 				"filename":"mcluhan.mp4"
 			}
 		]},
-		"video1then2": { "events":[
+		"video1andGpio1High": { "events":[
 			{
-				"type":"play_video",
+				"type":"playVideo",
 				"filename":"AA2014-1.mp4"
 			},
 			{
-				"type":"play_video",
-				"filename":"AA2014-2.mp4"
+				"type":"setGpioOut1High"
 			}
 		]},
 		"video2": { "events":[
 			{
-				"type":"play_video",
+				"type":"playVideo",
 				"filename":"AA2014-2.mp4"
 			}
 		]},
 		"video3": { "events":[
 			{
-				"type":"play_video",
+				"type":"playVideo",
 				"filename":"AA2014-3.mp4"
 			}
 		]},
 		"video4": { "events":[
 			{
-				"type":"play_video",
+				"type":"playVideo",
 				"filename":"AA2014-4.mp4"
 			}
 		]}

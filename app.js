@@ -10,6 +10,8 @@ var express = require('express')
   , PusherServer = require('pusher')
   , util = require('util')
   , exec = require('child_process').exec
+  , Gpio = require('onoff').Gpio;
+
   ;
 
 
@@ -55,7 +57,7 @@ app.get('/', function (req, res) {
 //Any GET request on http://my.ip/startSequence/SEQUENCE_NAME_HERE will try and start the sequence
 app.get('/startSequence/:sequenceName', function (req, res) {
   console.log('HTTP Event: startSequence: ' + req.param("sequenceName"));
-  var result = process_squence(req.param("sequenceName"));
+  var result = processSquence(req.param("sequenceName"));
   if (result == true) res.json({ok:true}); // status 200 is default
   else res.json(500, {error:result}); // status 500
 });
@@ -90,7 +92,7 @@ pusherClient.on('connect', function(){
   	appChannel.on('success', function(){
 		appChannel.on('startSequence', function(data){
 	    	console.log ("Pusher Event: startSequence: " + data);
-  			process_squence(data);
+  			processSequence(data);
 	  	});
   	});
 });
@@ -116,31 +118,43 @@ SETUP PUSHER SERVER
 
 /*
 GPIO SETUP USING ONNOFF
+This setup is for a 2 led 2 button version of the wiring diagram found at 
+http://blog.oscarliang.net/use-gpio-pins-on-raspberry-pi/
+One change is that the diagram there lists pin 15 as GPIO21. On the modern
+rPi pin 15 is refered to as GPIO 27
 */ 
-var Gpio = require('onoff').Gpio;
-var led = new Gpio(17, 'out');
-var button = new Gpio(18, 'in', 'both');
+var gpioOut1 = new Gpio(17, 'out');
+var gpioOut2 = new Gpio(27, 'out'); //GPIO 27 (rPi rev2) = GPIO 21 (rPi rev1)
+var gpioIn1 = new Gpio(23, 'in', 'both');
+var gpioIn2 = new Gpio(24, 'in', 'both');
 
-button.watch(function(err, value) {
+gpioIn1.watch(function(err, value) {
     if (err) exit();
-    led.writeSync(value);
+    var sequenceToProcess;
+    if (value == 1) sequenceToProcess = config.sequenceTriggers.gpioIn1ChangedValueToHigh;
+    else if (value == 0) sequenceToProcess = config.sequenceTriggers.gpioIn1ChangedValueToLow;
+    console.log("Button Event: Button 1 is now: " + value + " Sequence to Process: " + sequenceToProcess);
+  	if (sequenceToProcess != null) processSquence(sequenceToProcess);
 });
 
+gpioIn2.watch(function(err, value) {
+    if (err) exit();
+    var sequenceToProcess;
+    if (value == 1) sequenceToProcess = config.sequenceTriggers.gpioIn2ChangedValueToHigh;
+    else if (value == 0) sequenceToProcess = config.sequenceTriggers.gpioIn2ChangedValueToLow;
+    console.log("Button Event: Button 2 is now: " + value + " Sequence to Process: " + sequenceToProcess);
+  	if (sequenceToProcess != null) processSquence(sequenceToProcess);
+});
 
-
+/*
 function exit() {
     led.unexport();
     button.unexport();
     process.exit();
 }
-
 process.on('SIGINT', exit);
-
-/*
-button.watch(function(err, value) {
-    led.writeSync(value);
-});
 */
+
 
 /*
 EVENT PROCESSING
@@ -148,8 +162,8 @@ EVENT PROCESSING
 
 //Process an event
 //Returns true on success and an error string on any error
-function process_squence(sequenceName) {
-	console.log("process_squence: Beginning to process sequence: " + sequenceName);
+function processSquence(sequenceName) {
+	console.log("processSquence: Beginning to process sequence: " + sequenceName);
 	var sequence = config.sequences[sequenceName];
 	if (!sequence) { 
 		return console.log("Error: Sequence is not defined in sequence config");
@@ -160,29 +174,46 @@ function process_squence(sequenceName) {
 		return ("Error: No events are defined for this sequence in sequence config");
 	}
 
-	console.log("process_squence: Sequence Loaded. Events to proccess: " + JSON.stringify(sequence));
+	console.log("processSquence: Sequence Loaded. Events to proccess: " + JSON.stringify(sequence));
 	
 	//foreach event...
 	for (var i = 0; i<events.length; i++) {
 		action = events[i].type;
-		if (events[i].type == "play_video") play_video(events[i]);
-		if (events[i].type == "push_pusher_message") push_message(events[i]);
-		if (events[i].type == "emit_websocket_message") push_message(events[i]);
+		if (events[i].type == "playVideo") playVideo(events[i]);
+		if (events[i].type == "pushPusherMessage") pushPusherMessage(events[i]);
+		if (events[i].type == "pushWebsocketMessage") pushWebsocketMessage(events[i]);
+		if (events[i].type == "setGpioOut1High") writeGPIOValue(1, 1);
+		if (events[i].type == "setGpioOut1Low") writeGPIOValue(1, 0);
+		if (events[i].type == "setGpioOut2High") writeGPIOValue(2, 1);
+		if (events[i].type == "setGpioOut2Low") writeGPIOValue(2, 0);
+
 
 	}
 	return true;
 }
 
-function play_video(event) {
-	console.log("play_video: Playing Video: " + event.filename);
+function playVideo(event) {
+	console.log("playVideo: Playing Video: " + event.filename);
 	omx.pause(); //Stop any currently running videos
 	omx.start("media/" + event.filename);
 	omx.play();
 	return;
 }
 
-function push_websocket_message(event) {
-	console.log("push_websocket_message: Emiting a websocket Message: " + event.message);
+function pushPusherMessage(event) {
+	console.log("NOT IMPLEMENTED: pushPusherMessage: Pushing a message: " + event.message);
+	return;
+}
+
+function pushWebsocketMessage(event) {
+	console.log("pushWebsocketMessage: Emiting a websocket Message: " + event.message);
 	io.sockets.emit(event.message);
 	return;
 }
+
+function writeGPIOValue(gpioOutNumber, value) {
+	if (gpioOutNumber = 1) gpioOut1.writeSync(value);
+	else if (gpioOutNumber = 2) gpioOut2.writeSync(value);
+}
+
+    
