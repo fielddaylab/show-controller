@@ -1,12 +1,47 @@
 {
     "express": {
-		"port" : 8080,
-		"testMediaPath" : "media/test.mp4"
+		"port" : 8080
     },
     "pusher": {
 	    "id": "PUSHER_ID",
 	    "key": "PUSHER_KEY",
 	    "secret": "PUSHER_SECRET",
         "channel": "private-CHANNEL_NAME_FOR_THIS_DEVICE"
-    }
+    },
+	"sequences" : { 
+		"mcluhan": { "events":[
+			{
+				"type":"play_video",
+				"filename":"mcluhan.mp4"
+			}
+		]},
+		"video1then2": { "events":[
+			{
+				"type":"play_video",
+				"filename":"AA2014-1.mp4"
+			},
+			{
+				"type":"play_video",
+				"filename":"AA2014-2.mp4"
+			}
+		]},
+		"video2": { "events":[
+			{
+				"type":"play_video",
+				"filename":"AA2014-2.mp4"
+			}
+		]},
+		"video3": { "events":[
+			{
+				"type":"play_video",
+				"filename":"AA2014-3.mp4"
+			}
+		]},
+		"video4": { "events":[
+			{
+				"type":"play_video",
+				"filename":"AA2014-4.mp4"
+			}
+		]}
+	}
 }

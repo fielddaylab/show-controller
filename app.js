@@ -1,70 +1,3 @@
-/*
-CONFIG SECTION
-*/
-
-var sequences = 
-{
-	"1": 
-	{
-		"events":
-		[
-			{
-				"type":"play_video",
-				"filename":"AA2014-1.mp4"
-			},
-			{
-				"type":"trigger_event",
-				"protocol":"websocket",
-				"message":"vote"
-			}
-		]
-	},
-	"1then2": 
-	{
-		"events":
-		[
-			{
-				"type":"play_video",
-				"filename":"AA2014-1.mp4"
-			},
-			{
-				"type":"play_video",
-				"filename":"AA2014-2.mp4"
-			}
-		]
-	},
-	"2": 
-	{
-		"events":
-		[
-			{
-				"type":"play_video",
-				"filename":"AA2014-2.mp4"
-			}
-		]
-	},
-	"3": 
-	{
-		"events":
-		[
-			{
-				"type":"play_video",
-				"filename":"AA2014-3.mp4"
-			}
-		]
-	},
-	"4": 
-	{
-		"events":
-		[
-			{
-				"type":"play_video",
-				"filename":"AA2014-4.mp4"
-			}
-		]
-	}
-}
-
 var express = require('express')
   , app = express()  
   , server = require('http').createServer(app)
@@ -74,7 +7,9 @@ var express = require('express')
   , omx = require('omxcontrol')
   , fs = require('fs')
   , PusherClient = require('pusher-node-client').PusherClient
-  , PusherServer = require('pusher');
+  , PusherServer = require('pusher')
+  , util = require('util')
+  , exec = require('child_process').exec
   ;
 
 
@@ -82,7 +17,14 @@ var express = require('express')
 Load Config From File
 */
 var configFile = fs.readFileSync(__dirname + '/config.json');
-var config = JSON.parse(configFile);
+var config;
+try {
+	config = JSON.parse(configFile);
+}
+catch(e) {
+	console.log('Error in config.json, quitting: ' +e); 
+	process.exit();
+}
 console.log('Config Loaded: ' + JSON.stringify(config));
 
 /*
@@ -104,16 +46,9 @@ app.get('/', function (req, res) {
 		if (err) return console.log(err);
   		response = readme.replace('\n',"<br/>");
   		response += "<h1>Events Object</h1>"
-  		response += JSON.stringify(sequences);
+  		response += JSON.stringify(config.sequences);
   		res.send(response);
 	});
-});
-
-//Video playback test route
-//Any GET Request on http://my.ip/playTestVideo will trigger a test video over HDMI
-app.get('/playTestVideo', function (req, res) {
-	console.log('HTTP Event: playTestVideo');
-	omx.start(app.get('config').express.testMediaPath);
 });
 
 //Start Sequence trigger route
@@ -130,29 +65,13 @@ server.listen(app.get('config').express.port, function(){
   console.log('Express server listening on port ' + app.get('config').express.port);
 });
 
-
-/*
-SETUP SOCKET.IO WEBSOCKET SERVER
-*/
-io.sockets.on('connection', function (client){ 
-  
-  client.on('message', function (msg) {
-	handle_event(msg);
-  }) ;
-
-  client.on('disconnect', function () {
-  });
-});
-
 /*
 SETUP PUSHER CLIENT
 */
 pusherClient = new PusherClient(config.pusher);
 
-
 pres = null;
 pusherClient.on('connect', function(){
-	
 	//Subscribe to the presence channel
 	//Presence channel events will show when a user connects or disconnects from this app
   	presenceChannel = pusherClient.subscribe("presence-users", {user_id: "system"})
@@ -166,8 +85,7 @@ pusherClient.on('connect', function(){
 	    });
   	});
 
-  	//Subscribe to the presence channel
-	//Presence channel events will show when a user connects or disconnects from this app
+  	//Subscribe to this device's channel, specified in the config file
   	appChannel = pusherClient.subscribe(config.pusher.channel)
   	appChannel.on('success', function(){
 		appChannel.on('startSequence', function(data){
@@ -175,17 +93,25 @@ pusherClient.on('connect', function(){
   			process_squence(data);
 	  	});
   	});
-
-
-
 });
 
 pusherClient.connect();
 
 /*
+SETUP SOCKET.IO WEBSOCKET SERVER
+*/
+io.sockets.on('connection', function (client){ 
+  client.on('message', function (msg) {
+	handle_event(msg);
+  }) ;
+
+  client.on('disconnect', function () {
+  });
+});
+
+/*
 SETUP PUSHER SERVER
 */
-
 
 
 /*
@@ -196,7 +122,7 @@ EVENT PROCESSING
 //Returns true on success and an error string on any error
 function process_squence(sequenceName) {
 	console.log("process_squence: Beginning to process sequence: " + sequenceName);
-	var sequence = sequences[sequenceName];
+	var sequence = config.sequences[sequenceName];
 	if (!sequence) { 
 		return console.log("Error: Sequence is not defined in sequence config");
 	}
@@ -224,10 +150,6 @@ function play_video(event) {
 	omx.pause(); //Stop any currently running videos
 	omx.start("media/" + event.filename);
 	omx.play();
-	setTimeout(finish_playing_video, 3000);
-	return;
-}
-function finish_playing_video(){
 	return;
 }
 
