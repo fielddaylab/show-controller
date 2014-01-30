@@ -1,0 +1,11 @@
+{
+        "express": {
+        		port : 8080,
+				testMediaPath : "media/test.mp4"
+        }
+        "pusher": {
+                "id": "YOUR_APP_ID",
+                "key": "YOUR_APP_KEY",
+                "secret": "YOUR_APP_SECRET"
+        }
+}
