@@ -112,13 +112,14 @@ app.get('/', function (req, res) {
 //Video playback test route
 //Any GET Request on http://my.ip/playTestVideo will trigger a test video over HDMI
 app.get('/playTestVideo', function (req, res) {
-	console.log('Playing Test Media: ' + app.get('config').express.testMediaPath);
+	console.log('HTTP Event: playTestVideo');
 	omx.start(app.get('config').express.testMediaPath);
 });
 
 //Start Sequence trigger route
 //Any GET request on http://my.ip/startSequence/SEQUENCE_NAME_HERE will try and start the sequence
 app.get('/startSequence/:sequenceName', function (req, res) {
+  console.log('HTTP Event: startSequence: ' + req.param("sequenceName"));
   var result = process_squence(req.param("sequenceName"));
   if (result == true) res.json({ok:true}); // status 200 is default
   else res.json(500, {error:result}); // status 500
@@ -146,30 +147,40 @@ io.sockets.on('connection', function (client){
 /*
 SETUP PUSHER CLIENT
 */
-console.log(config.pusher.id);
+pusherClient = new PusherClient(config.pusher);
 
-pusher_client = new PusherClient
-  appId: config.pusher.id
-  key: config.pusher.key
-  secret: config.pusher.secret
 
 pres = null;
-pusher_client.on('connect', function(){
-  	pres = pusher_client.subscribe("presence-users", {user_id: "system"})
-
-  	pres.on('success', function(){
-
-		pres.on('pusher_internal:member_removed', function(data){
+pusherClient.on('connect', function(){
+	
+	//Subscribe to the presence channel
+	//Presence channel events will show when a user connects or disconnects from this app
+  	presenceChannel = pusherClient.subscribe("presence-users", {user_id: "system"})
+  	presenceChannel.on('success', function(){
+		presenceChannel.on('pusher_internal:member_removed', function(data){
 	    	console.log ("Pusher Event: member_removed");
 	  	});
 
-	    pres.on('pusher_internal:member_added', function(data){
+	    presenceChannel.on('pusher_internal:member_added', function(data){
 	      console.log ("Pusher Event: member_added");
 	    });
   	});
+
+  	//Subscribe to the presence channel
+	//Presence channel events will show when a user connects or disconnects from this app
+  	appChannel = pusherClient.subscribe(config.pusher.channel)
+  	appChannel.on('success', function(){
+		appChannel.on('startSequence', function(data){
+	    	console.log ("Pusher Event: startSequence: " + data);
+  			process_squence(data);
+	  	});
+  	});
+
+
+
 });
 
-pusher_client.connect();
+pusherClient.connect();
 
 /*
 SETUP PUSHER SERVER
@@ -184,7 +195,7 @@ EVENT PROCESSING
 //Process an event
 //Returns true on success and an error string on any error
 function process_squence(sequenceName) {
-	console.log("Beginning to process sequence: " + sequenceName);
+	console.log("process_squence: Beginning to process sequence: " + sequenceName);
 	var sequence = sequences[sequenceName];
 	if (!sequence) { 
 		return console.log("Error: Sequence is not defined in sequence config");
@@ -195,7 +206,7 @@ function process_squence(sequenceName) {
 		return ("Error: No events are defined for this sequence in sequence config");
 	}
 
-	console.log("Sequence Loaded. Events to proccess: " + JSON.stringify(sequence));
+	console.log("process_squence: Sequence Loaded. Events to proccess: " + JSON.stringify(sequence));
 	
 	//foreach event...
 	for (var i = 0; i<events.length; i++) {
@@ -208,9 +219,8 @@ function process_squence(sequenceName) {
 	return true;
 }
 
-
 function play_video(event) {
-	console.log("Playing Video: " + event.filename);
+	console.log("play_video: Playing Video: " + event.filename);
 	omx.pause(); //Stop any currently running videos
 	omx.start("media/" + event.filename);
 	omx.play();
@@ -222,7 +232,7 @@ function finish_playing_video(){
 }
 
 function push_websocket_message(event) {
-	console.log("Emiting a websocket Message: " + event.message);
+	console.log("push_websocket_message: Emiting a websocket Message: " + event.message);
 	io.sockets.emit(event.message);
 	return;
 }

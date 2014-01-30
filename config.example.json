@@ -1,11 +1,12 @@
 {
-        "express": {
-        		port : 8080,
-				testMediaPath : "media/test.mp4"
-        }
-        "pusher": {
-                "id": "YOUR_APP_ID",
-                "key": "YOUR_APP_KEY",
-                "secret": "YOUR_APP_SECRET"
-        }
+    "express": {
+		"port" : 8080,
+		"testMediaPath" : "media/test.mp4"
+    },
+    "pusher": {
+	    "id": "PUSHER_ID",
+	    "key": "PUSHER_KEY",
+	    "secret": "PUSHER_SECRET",
+        "channel": "private-CHANNEL_NAME_FOR_THIS_DEVICE"
+    }
 }
