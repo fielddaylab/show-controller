@@ -10,5 +10,6 @@
     "socket.io":"0.9.14",
     "omxcontrol":"*",
     "pusher-node-client":"*",
-    "pusher":"*"
+    "pusher":"*",
+    "onoff":"*"
 }    }
