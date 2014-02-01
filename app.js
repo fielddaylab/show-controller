@@ -57,7 +57,7 @@ app.get('/', function (req, res) {
 //Any GET request on http://my.ip/startSequence/SEQUENCE_NAME_HERE will try and start the sequence
 app.get('/startSequence/:sequenceName', function (req, res) {
   console.log('HTTP Event: startSequence: ' + req.param("sequenceName"));
-  var result = processSquence(req.param("sequenceName"));
+  var result = processSequence(req.param("sequenceName"));
   if (result == true) res.json({ok:true}); // status 200 is default
   else res.json(500, {error:result}); // status 500
 });
