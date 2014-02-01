@@ -162,7 +162,7 @@ EVENT PROCESSING
 
 //Process an event
 //Returns true on success and an error string on any error
-function processSquence(sequenceName) {
+function processSequence(sequenceName) {
 	console.log("processSquence: Beginning to process sequence: " + sequenceName);
 	var sequence = config.sequences[sequenceName];
 	if (!sequence) { 
